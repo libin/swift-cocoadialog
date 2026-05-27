@@ -1,21 +1,30 @@
 import AppKit
 
 /// Reusable layout: a vertical stack inside an opaque NSPanel.
+/// - Optional icon on the left
 /// - Header (bold) at top
-/// - Message (regular) below header
+/// - Message (regular) below header — supports inline markdown
 /// - Custom controlView in the middle (filled by the concrete Control)
 /// - Buttons row at bottom-right
 final class DialogPanel {
 	let panel: NSPanel
 	let header: NSTextField
 	let message: NSTextField
+	let iconView: NSImageView
 	let controlView: NSView
 	let buttonsRow: NSStackView
 	private(set) var buttons: [NSButton] = []
 	private var clickedIndex: Int? = nil
 	private var keyMonitor: Any?
+	private var timeoutTimer: Timer?
+	private let timeout: Double
+	private let timeoutDefaultButton: String
 
 	init(options: ParsedOptions) {
+		timeout = options.double("timeout")
+		timeoutDefaultButton = options.string("timeout-default-button").isEmpty
+			? options.string("default-button")
+			: options.string("timeout-default-button")
 		// Window setup.
 		let style: NSWindow.StyleMask = [.titled, .closable]
 		panel = NSPanel(
@@ -34,22 +43,49 @@ final class DialogPanel {
 		panel.titleVisibility = .visible
 		panel.titlebarAppearsTransparent = false
 
+		// Icon.
+		iconView = NSImageView()
+		iconView.translatesAutoresizingMaskIntoConstraints = false
+		iconView.imageScaling = .scaleProportionallyUpOrDown
+		let icon = IconLoader.resolve(
+			name: options.string("icon"),
+			file: options.string("icon-file")
+		)
+		iconView.image = icon
+		iconView.isHidden = (icon == nil)
+
 		// Header / message.
-		header = NSTextField(labelWithString: options.string("header"))
+		header = NSTextField(labelWithString: "")
 		header.font = .boldSystemFont(ofSize: NSFont.systemFontSize + 2)
 		header.translatesAutoresizingMaskIntoConstraints = false
 		header.isHidden = options.string("header").isEmpty
 		header.lineBreakMode = .byWordWrapping
 		header.maximumNumberOfLines = 0
 		header.preferredMaxLayoutWidth = 440
+		header.allowsEditingTextAttributes = true
+		header.isSelectable = true
+		if !header.isHidden {
+			header.attributedStringValue = Markdown.attributed(
+				options.string("header"),
+				font: .boldSystemFont(ofSize: NSFont.systemFontSize + 2)
+			)
+		}
 
-		message = NSTextField(labelWithString: options.string("message"))
+		message = NSTextField(labelWithString: "")
 		message.font = .systemFont(ofSize: NSFont.systemFontSize)
 		message.translatesAutoresizingMaskIntoConstraints = false
 		message.isHidden = options.string("message").isEmpty
 		message.lineBreakMode = .byWordWrapping
 		message.maximumNumberOfLines = 0
 		message.preferredMaxLayoutWidth = 440
+		message.allowsEditingTextAttributes = true
+		message.isSelectable = true
+		if !message.isHidden {
+			message.attributedStringValue = Markdown.attributed(
+				options.string("message"),
+				font: .systemFont(ofSize: NSFont.systemFontSize)
+			)
+		}
 
 		controlView = NSView()
 		controlView.translatesAutoresizingMaskIntoConstraints = false
@@ -62,7 +98,6 @@ final class DialogPanel {
 
 		// Build buttons from --buttons / --button1 / --button2 / --button3.
 		var labels = options.array("buttons")
-		// --button1/2/3 fall back when --buttons not provided.
 		let b1 = options.string("button1")
 		let b2 = options.string("button2")
 		let b3 = options.string("button3")
@@ -73,17 +108,21 @@ final class DialogPanel {
 
 		// Compose contentView.
 		let cv = panel.contentView!
+		cv.addSubview(iconView)
 		cv.addSubview(header)
 		cv.addSubview(message)
 		cv.addSubview(controlView)
 		cv.addSubview(buttonsRow)
 
-		NSLayoutConstraint.activate([
-			header.leadingAnchor.constraint(equalTo: cv.leadingAnchor, constant: 20),
+		let textLeading = iconView.isHidden ? cv.leadingAnchor : iconView.trailingAnchor
+		let textLeadingPad: CGFloat = iconView.isHidden ? 20 : 16
+
+		var constraints: [NSLayoutConstraint] = [
+			header.leadingAnchor.constraint(equalTo: textLeading, constant: textLeadingPad),
 			cv.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: 20),
 			header.topAnchor.constraint(equalTo: cv.topAnchor, constant: 20),
 
-			message.leadingAnchor.constraint(equalTo: cv.leadingAnchor, constant: 20),
+			message.leadingAnchor.constraint(equalTo: textLeading, constant: textLeadingPad),
 			cv.trailingAnchor.constraint(equalTo: message.trailingAnchor, constant: 20),
 			message.topAnchor.constraint(equalTo: header.isHidden ? cv.topAnchor : header.bottomAnchor, constant: header.isHidden ? 20 : 8),
 
@@ -94,7 +133,16 @@ final class DialogPanel {
 			buttonsRow.topAnchor.constraint(greaterThanOrEqualTo: controlView.bottomAnchor, constant: 16),
 			cv.trailingAnchor.constraint(equalTo: buttonsRow.trailingAnchor, constant: 20),
 			cv.bottomAnchor.constraint(equalTo: buttonsRow.bottomAnchor, constant: 20),
-		])
+		]
+		if !iconView.isHidden {
+			constraints += [
+				iconView.leadingAnchor.constraint(equalTo: cv.leadingAnchor, constant: 20),
+				iconView.topAnchor.constraint(equalTo: cv.topAnchor, constant: 20),
+				iconView.widthAnchor.constraint(equalToConstant: 48),
+				iconView.heightAnchor.constraint(equalToConstant: 48),
+			]
+		}
+		NSLayoutConstraint.activate(constraints)
 
 		// Apply explicit width / height if given.
 		var size = NSSize(width: 480, height: 200)
@@ -112,18 +160,17 @@ final class DialogPanel {
 	private func anchorAboveControlView() -> NSLayoutAnchor<NSLayoutYAxisAnchor> {
 		if !message.isHidden { return message.bottomAnchor }
 		if !header.isHidden  { return header.bottomAnchor }
+		if !iconView.isHidden { return iconView.bottomAnchor }
 		return panel.contentView!.topAnchor
 	}
 
 	private func spacingAboveControlView() -> CGFloat {
-		(message.isHidden && header.isHidden) ? 20 : 16
+		(message.isHidden && header.isHidden && iconView.isHidden) ? 20 : 16
 	}
 
 	private func makeButtons(labels: [String], options: ParsedOptions) {
 		let cancelTarget = options.string("cancel-button").lowercased()
 		let defaultTarget = options.string("default-button").lowercased()
-		// cocoadialog renders buttons right-to-left: button[0] is rightmost.
-		// Create them in order, but reverse for the stack so index 0 = right.
 		for (i, label) in labels.enumerated() {
 			let b = NSButton(title: label, target: self, action: #selector(buttonClicked(_:)))
 			b.tag = i
@@ -148,7 +195,6 @@ final class DialogPanel {
 		keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
 			guard let self else { return event }
 			if event.keyCode == 53, event.window === self.panel {
-				// Find a cancel button or last button as fallback.
 				let cancel = self.buttons.first(where: { $0.keyEquivalent == "\u{1B}" }) ?? self.buttons.last
 				cancel?.performClick(nil)
 				return nil
@@ -162,11 +208,27 @@ final class DialogPanel {
 		NSApp.stopModal(withCode: NSApplication.ModalResponse(sender.tag))
 	}
 
+	private func startTimeout(_ seconds: Double, defaultButton: String) {
+		timeoutTimer = Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { [weak self] _ in
+			guard let self else { return }
+			let target = defaultButton.lowercased()
+			let btn = self.buttons.first(where: { $0.title.lowercased() == target })
+				?? self.buttons.first(where: { $0.keyEquivalent == "\r" })
+				?? self.buttons.first
+			btn?.performClick(nil)
+		}
+	}
+
 	/// Run modal, return the clicked button's tag (or nil if dismissed).
 	func runModal() -> (index: Int?, label: String?) {
+		if timeout > 0 {
+			startTimeout(timeout, defaultButton: timeoutDefaultButton)
+		}
 		panel.makeKeyAndOrderFront(nil)
 		NSApp.activate(ignoringOtherApps: true)
 		let resp = NSApp.runModal(for: panel)
+		timeoutTimer?.invalidate()
+		timeoutTimer = nil
 		if let monitor = keyMonitor {
 			NSEvent.removeMonitor(monitor)
 			keyMonitor = nil

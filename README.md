@@ -79,6 +79,13 @@ cocoadialog msgbox --title "Hello" --message "Continue?" \
   deprecated `NSMatrix`. Behaviour is identical from the CLI's perspective.
 - Backslash escapes in `--text` / `--message` (`\n`, `\t`, `\r`) are interpreted
   the way most shell users expect.
+- `--header` and `--message` accept inline markdown (`**bold**`, `*italic*`,
+  `` `code` ``, `[link](url)`).
+- `--icon` accepts semantic names (`info`, `caution`, `stop`), SF Symbol names,
+  bundle ids, and `--icon-file` accepts paths, `.app` bundles, file:// URLs,
+  data: URLs, or raw base64.
+- `--timeout N` auto-closes after N seconds, clicking
+  `--timeout-default-button` (or the default button) automatically.
 - `--text` is treated as a deprecated alias for `--message` everywhere except
   `inputbox`/`textbox`, where it pre-fills the field (matching upstream's late
   3.x behaviour).

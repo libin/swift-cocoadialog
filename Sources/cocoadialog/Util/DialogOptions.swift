@@ -23,5 +23,6 @@ enum DialogOptions {
 		OptionDefinition(name: "vibrancy",   kind: .boolean, defaultValue: "NO", help: "Translucent panel (default NO)"),
 		OptionDefinition(name: "float",      kind: .boolean, defaultValue: "YES", aliases: ["no-float"], help: "Floating panel level"),
 		OptionDefinition(name: "timeout",    kind: .number, help: "Auto-close after N seconds"),
+		OptionDefinition(name: "timeout-default-button", kind: .string, help: "Button to click on timeout (default: default-button)"),
 	]
 }

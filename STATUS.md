@@ -39,9 +39,9 @@ verified against
 
 ## Pending / nice-to-have
 
-- [ ] Markdown rendering for `--header` / `--message`
-- [ ] `--icon` / `--icon-file` rendering
-- [ ] `--timeout` auto-close
+- [x] Markdown rendering for `--header` / `--message` (inline, system parser)
+- [x] `--icon` / `--icon-file` rendering (SF Symbols, file paths, .app bundles, base64)
+- [x] `--timeout` auto-close (+ `--timeout-default-button`)
 - [ ] `--width` / `--height` percentages of screen
 - [ ] `--debug` JSON output mode
 - [ ] AppleScript bridge mode (was used by some legacy callers)
