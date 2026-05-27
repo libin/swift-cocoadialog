@@ -194,28 +194,31 @@ final class ChoiceControl: Control {
 		let buttons = objc_getAssociatedObject(self, &Self.buttonsKey) as? [NSButton] ?? []
 		for b in buttons where b !== sender { b.state = .off }
 		sender.state = .on
-		syncInputEnabled()
+		syncInputEnabled(focus: true)
 	}
 
 	@objc private func inputDidChange(_ note: Notification) {
 		let buttons = objc_getAssociatedObject(self, &Self.buttonsKey) as? [NSButton] ?? []
 		let inputRadio = objc_getAssociatedObject(self, &Self.inputRadioKey) as? NSButton
 		guard let rb = inputRadio else { return }
+		let wasOn = rb.state == .on
 		for b in buttons where b !== rb { b.state = .off }
 		rb.state = .on
-		syncInputEnabled()
+		// Only focus if we just transitioned from off to on; otherwise the user
+		// is already typing and we'd reset the cursor / selection.
+		syncInputEnabled(focus: !wasOn)
 	}
 
-	private func syncInputEnabled() {
+	private func syncInputEnabled(focus: Bool) {
 		let inputRadio = objc_getAssociatedObject(self, &Self.inputRadioKey) as? NSButton
 		let enabled = inputRadio?.state == .on
 		if let tf = objc_getAssociatedObject(self, &Self.inputFieldKey) as? NSTextField {
 			tf.isEnabled = enabled
-			if enabled { tf.window?.makeFirstResponder(tf) }
+			if enabled && focus { tf.window?.makeFirstResponder(tf) }
 		}
 		if let tv = objc_getAssociatedObject(self, &Self.inputTextViewKey) as? NSTextView {
 			tv.isEditable = enabled
-			if enabled { tv.window?.makeFirstResponder(tv) }
+			if enabled && focus { tv.window?.makeFirstResponder(tv) }
 		}
 	}
 }
