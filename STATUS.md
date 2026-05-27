@@ -1,31 +1,49 @@
 # swift-cocoadialog status
 
+All controls used by TextMate's Bundle Support are implemented and visually
+verified against
+[CocoaDialog-Test.tmbundle](https://github.com/libin/CocoaDialog-Test.tmbundle).
+
 ## Implemented
 
-- [x] Core option parser with type kinds (boolean / number / string / stringArray)
-- [x] Boolean alias inversion via `no-X` prefix
-- [x] Common dialog options (`--title`, `--header`, `--message`, `--buttons`, etc.)
-- [x] Dialog panel with proper auto-layout (header → message → controlView → buttons)
-- [x] Solid (non-vibrant) panel by default
-- [x] Right-to-left button rendering (button[0] = rightmost)
-- [x] ESC → cancel-button
-- [x] String output mode (`--string-output`)
-- [x] `msgbox`
-- [x] `inputbox` (incl. `--secure`, `--placeholder`)
-- [x] `textbox` (incl. ⌘⏎ submit, `--editable`, `--file`)
-- [x] Aliases: `ok-msgbox`, `yesno-msgbox`, `question`, `ok-cancel`, `secure-input`, `standard-input`, `filesave`, `fileselect`
+### Infrastructure
 
-## Pending
+- [x] Option parser with typed kinds (boolean / number / string / stringArray)
+- [x] Boolean inversion via `no-X` prefix
+- [x] Aliases with default-flag injection
+- [x] Common options (`--title`, `--header`, `--message`, `--buttons`,
+      `--string-output`, etc.)
+- [x] Auto-layout dialog panel (header → message → control view → buttons)
+- [x] Solid, non-vibrant panel
+- [x] Right-to-left button rendering (`--button1` = rightmost / default)
+- [x] ESC closes via cancel button
+- [x] Backslash escape handling (`\n`, `\t`, `\r`, `\\`) for text fields
+- [x] Help: `cocoadialog --help`, `cocoadialog <control> --help`
 
-- [ ] `dropdown`
-- [ ] `radio` / `checkbox` (NSMatrix)
-- [ ] `slider` (with live label, integer/float formatting)
-- [ ] `progressbar` (stdin-driven, auto-close on EOF)
-- [ ] `open` (NSOpenPanel: directories, multi-select, allowed extensions)
-- [ ] `save` (NSSavePanel)
-- [ ] `about`
+### Controls
+
+| Control                | Notes                                                                |
+|------------------------|----------------------------------------------------------------------|
+| `msgbox`               | + aliases `ok-msgbox`, `yesno-msgbox`, `question`, `ok-cancel`        |
+| `inputbox`             | `--secure`, `--placeholder`, `--value`, `--text`                      |
+| `secure-input`         | alias of `inputbox --secure`                                          |
+| `textbox`              | Multi-line, `--editable`, `--file`, `⌘⏎` submits default button       |
+| `dropdown`             | `NSPopUpButton`, alias `standard-dropdown`                            |
+| `radio`                | `NSButton(.radio)` stack with shared exclusivity                      |
+| `checkbox`             | `NSButton(.checkbox)` stack                                           |
+| `slider`               | Live label, integer or `--return-float` (2 dp)                        |
+| `progressbar`          | stdin-driven (`<percent> <label?>`), auto-closes on EOF, `--stoppable`|
+| `open` / `fileselect`  | `NSOpenPanel` (multi-select, dirs only, allowed extensions)           |
+| `save` / `filesave`    | `NSSavePanel`                                                         |
+| `about`                | Native `NSAlert`-based                                                |
+
+## Pending / nice-to-have
+
 - [ ] Markdown rendering for `--header` / `--message`
 - [ ] `--icon` / `--icon-file` rendering
 - [ ] `--timeout` auto-close
 - [ ] `--width` / `--height` percentages of screen
-- [ ] CocoaDialog Test bundle: parity verification on every test
+- [ ] `--debug` JSON output mode
+- [ ] AppleScript bridge mode (was used by some legacy callers)
+
+None of these are blockers for the TextMate Bundle Support use case.
