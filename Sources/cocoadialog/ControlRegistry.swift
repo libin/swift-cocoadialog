@@ -13,7 +13,7 @@ enum ControlRegistry {
 		case ProgressbarControl.scope: return ProgressbarControl()
 		case OpenControl.scope:        return OpenControl()
 		case SaveControl.scope:        return SaveControl()
-		// More controls (about) come online as they're implemented.
+		case AboutControl.scope:       return AboutControl()
 		case "input":                  return InputboxControl()  // alias path post-resolve
 		default:                    return nil
 		}

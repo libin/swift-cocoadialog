@@ -55,10 +55,9 @@ final class FilePickerControl: Control {
 		}
 
 		let title = options.string("title")
-		if !title.isEmpty {
-			panel.title = title
-			panel.message = title
-		}
+		if !title.isEmpty { panel.title = title }
+		let message = options.string("message")
+		if !message.isEmpty { panel.message = message }
 		let prompt = options.string("button1")
 		if !prompt.isEmpty { panel.prompt = prompt }
 

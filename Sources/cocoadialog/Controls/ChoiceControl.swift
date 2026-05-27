@@ -35,11 +35,11 @@ final class ChoiceControl: Control {
 
 		var buttons: [NSButton] = []
 		for (i, label) in items.enumerated() {
-			let b = NSButton(checkboxWithTitle: label, target: nil, action: nil)
+			let b: NSButton
 			if kind == .radio {
-				b.setButtonType(.radio)
+				b = NSButton(radioButtonWithTitle: label, target: nil, action: nil)
 			} else {
-				b.setButtonType(.switch)
+				b = NSButton(checkboxWithTitle: label, target: nil, action: nil)
 			}
 			let key = String(i)
 			if initiallyChecked.contains(key) || initiallyChecked.contains(label) {

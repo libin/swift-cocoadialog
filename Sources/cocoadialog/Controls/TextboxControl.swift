@@ -47,7 +47,7 @@ final class TextboxControl: Control {
 			}
 		}
 		if !initial.isEmpty {
-			tv.string = initial
+			tv.string = unescapeBackslashes(initial)
 		}
 		if options.bool("selected") {
 			tv.setSelectedRange(NSRange(location: 0, length: tv.string.count))
