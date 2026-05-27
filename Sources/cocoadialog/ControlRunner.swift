@@ -15,7 +15,7 @@ final class ControlRunner {
 		exitCode = r.exit
 
 		let stringOutput = options.bool("string-output")
-		let json = options.bool("json")
+		let json = options.bool("json") || (ProcessInfo.processInfo.environment["COCOADIALOG_JSON"] == "1")
 		let suppressNewline = options.bool("no-newline")
 
 		var out: String

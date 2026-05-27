@@ -18,6 +18,9 @@ final class ChoiceControl: Control {
 			OptionDefinition(name: "disabled", kind: .stringArray, maxValues: -1, help: "Disabled indices or labels"),
 			OptionDefinition(name: "rows", kind: .number, help: "Force layout rows (default: auto)"),
 			OptionDefinition(name: "columns", kind: .number, help: "Force layout columns (default: 1)"),
+			OptionDefinition(name: "with-input", kind: .string, help: "Append an inline freeform input row with this label (single-line)"),
+			OptionDefinition(name: "with-input-multiline", kind: .boolean, help: "Render --with-input as a multi-line text box instead of a single-line input"),
+			OptionDefinition(name: "input-placeholder", kind: .string, help: "Placeholder for the inline input (when --with-input)"),
 		]
 	}
 
@@ -26,6 +29,10 @@ final class ChoiceControl: Control {
 		let items = options.array("items")
 		let initiallyChecked = Set(options.array("checked"))
 		let disabled = Set(options.array("disabled"))
+		let inputLabel = options.string("with-input")
+		let hasInput = !inputLabel.isEmpty
+		let inputMultiline = options.bool("with-input-multiline")
+		let placeholder = options.string("input-placeholder")
 
 		let stack = NSStackView()
 		stack.orientation = .vertical
@@ -49,12 +56,56 @@ final class ChoiceControl: Control {
 				b.isEnabled = false
 			}
 			if kind == .radio {
-				// Radio buttons need a shared action target so only one is on.
 				b.action = #selector(radioToggled(_:))
 				b.target = self
 			}
 			buttons.append(b)
 			stack.addArrangedSubview(b)
+		}
+
+		// Inline input row + radio button (radio mode only).
+		var inputField: NSTextField? = nil
+		var inputView: NSView? = nil
+		var inputTextView: NSTextView? = nil
+		var inputRadio: NSButton? = nil
+		if hasInput {
+			if kind == .radio {
+				let rb = NSButton(radioButtonWithTitle: inputLabel, target: self, action: #selector(radioToggled(_:)))
+				buttons.append(rb)
+				stack.addArrangedSubview(rb)
+				inputRadio = rb
+			}
+			if inputMultiline {
+				let scroll = NSScrollView()
+				scroll.translatesAutoresizingMaskIntoConstraints = false
+				scroll.hasVerticalScroller = true
+				scroll.borderType = .bezelBorder
+				let tv = NSTextView()
+				tv.isEditable = true
+				tv.isRichText = false
+				tv.font = .systemFont(ofSize: NSFont.systemFontSize)
+				tv.textContainerInset = NSSize(width: 6, height: 6)
+				tv.minSize = NSSize(width: 0, height: 0)
+				tv.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+				tv.isVerticallyResizable = true
+				tv.autoresizingMask = .width
+				scroll.documentView = tv
+				scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 90).isActive = true
+				inputView = scroll
+				inputTextView = tv
+				stack.addArrangedSubview(scroll)
+			} else {
+				let tf = NSTextField()
+				tf.translatesAutoresizingMaskIntoConstraints = false
+				tf.placeholderString = placeholder.isEmpty ? inputLabel : placeholder
+				tf.bezelStyle = .roundedBezel
+				inputView = tf
+				inputField = tf
+				stack.addArrangedSubview(tf)
+			}
+			if let v = inputView {
+				v.widthAnchor.constraint(greaterThanOrEqualToConstant: 360).isActive = true
+			}
 		}
 
 		// Default to first radio if nothing pre-selected.
@@ -65,12 +116,11 @@ final class ChoiceControl: Control {
 		dialog.controlView.addSubview(stack)
 		NSLayoutConstraint.activate([
 			stack.leadingAnchor.constraint(equalTo: dialog.controlView.leadingAnchor),
-			stack.trailingAnchor.constraint(lessThanOrEqualTo: dialog.controlView.trailingAnchor),
+			stack.trailingAnchor.constraint(equalTo: dialog.controlView.trailingAnchor),
 			stack.topAnchor.constraint(equalTo: dialog.controlView.topAnchor),
 			dialog.controlView.bottomAnchor.constraint(equalTo: stack.bottomAnchor),
 		])
 
-		// Stash for radio toggle handler.
 		objc_setAssociatedObject(self, &Self.buttonsKey, buttons, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
 
 		let (index, label) = dialog.runModal()
@@ -78,10 +128,29 @@ final class ChoiceControl: Control {
 		r.buttonIndex = index
 		r.buttonLabel = label
 		if let label { r.values.append(label) }
-		// Emit selected items (one per line for checkbox; single for radio).
-		for b in buttons where b.state == .on {
-			r.values.append(b.title)
+
+		// Emit one selected radio's label (or all checked checkboxes), then
+		// the freeform text if --with-input was set.
+		let inputText: String = {
+			if let f = inputField { return f.stringValue }
+			if let tv = inputTextView { return tv.string }
+			return ""
+		}()
+		for (i, b) in buttons.enumerated() where b.state == .on {
+			// In radio mode, when the inline-input radio is the selected one,
+			// emit the typed text instead of the radio label.
+			if kind == .radio, hasInput, b === inputRadio {
+				r.values.append(inputText)
+			} else {
+				r.values.append(b.title)
+			}
+			_ = i
 		}
+		// Checkbox: also append input text on its own line if non-empty.
+		if kind == .checkbox, hasInput, !inputText.isEmpty {
+			r.values.append(inputText)
+		}
+
 		if let idx = index, idx > 0 {
 			r.exit = .cancel
 		}
