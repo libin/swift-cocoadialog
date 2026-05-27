@@ -21,6 +21,7 @@ final class ChoiceControl: Control {
 			OptionDefinition(name: "with-input", kind: .string, help: "Append an inline freeform input row with this label (single-line)"),
 			OptionDefinition(name: "with-input-multiline", kind: .boolean, help: "Render --with-input as a multi-line text box instead of a single-line input"),
 			OptionDefinition(name: "input-placeholder", kind: .string, help: "Placeholder for the inline input (when --with-input)"),
+			OptionDefinition(name: "recommended", kind: .string, help: "Index or label of the recommended option (pre-checked + (recommended) suffix in muted color)"),
 		]
 	}
 
@@ -33,6 +34,17 @@ final class ChoiceControl: Control {
 		let hasInput = !inputLabel.isEmpty
 		let inputMultiline = options.bool("with-input-multiline")
 		let placeholder = options.string("input-placeholder")
+
+		// Resolve --recommended: accept 0-based index or label match.
+		let recommendedRaw = options.string("recommended")
+		var recommendedIdx: Int = -1
+		if !recommendedRaw.isEmpty {
+			if let n = Int(recommendedRaw), n >= 0, n < items.count {
+				recommendedIdx = n
+			} else if let n = items.firstIndex(of: recommendedRaw) {
+				recommendedIdx = n
+			}
+		}
 
 		let stack = NSStackView()
 		stack.orientation = .vertical
@@ -47,6 +59,19 @@ final class ChoiceControl: Control {
 				b = NSButton(radioButtonWithTitle: label, target: nil, action: nil)
 			} else {
 				b = NSButton(checkboxWithTitle: label, target: nil, action: nil)
+			}
+			if i == recommendedIdx {
+				// Append " (recommended)" in muted color; pre-check this option.
+				let base = NSMutableAttributedString(
+					string: label,
+					attributes: [.foregroundColor: NSColor.labelColor]
+				)
+				base.append(NSAttributedString(
+					string: " (recommended)",
+					attributes: [.foregroundColor: NSColor.secondaryLabelColor]
+				))
+				b.attributedTitle = base
+				b.state = .on
 			}
 			let key = String(i)
 			if initiallyChecked.contains(key) || initiallyChecked.contains(label) {
