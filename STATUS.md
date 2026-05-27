@@ -18,6 +18,7 @@ verified against
 - [x] Right-to-left button rendering (`--button1` = rightmost / default)
 - [x] ESC closes via cancel button
 - [x] Backslash escape handling (`\n`, `\t`, `\r`, `\\`) for text fields
+- [x] Auto-grow panel width to fit longest header/message line (cap 70% screen)
 - [x] Help: `cocoadialog --help`, `cocoadialog <control> --help`
 
 ### Controls
@@ -29,8 +30,8 @@ verified against
 | `secure-input`         | alias of `inputbox --secure`                                          |
 | `textbox`              | Multi-line, `--editable`, `--file`, `⌘⏎` submits default button       |
 | `dropdown`             | `NSPopUpButton`, alias `standard-dropdown`                            |
-| `radio`                | `NSButton(.radio)` stack with shared exclusivity                      |
-| `checkbox`             | `NSButton(.checkbox)` stack                                           |
+| `radio`                | `NSButton(.radio)` stack with shared exclusivity, `--with-input` for inline freeform row, `--with-input-multiline`, `--recommended <index|label>` (pre-checks + muted suffix) |
+| `checkbox`             | `NSButton(.checkbox)` stack, `--with-input` for inline freeform row, `--with-input-multiline` |
 | `slider`               | Live label, integer or `--return-float` (2 dp)                        |
 | `progressbar`          | stdin-driven (`<percent> <label?>`), auto-closes on EOF, `--stoppable`|
 | `open` / `fileselect`  | `NSOpenPanel` (multi-select, dirs only, allowed extensions)           |
