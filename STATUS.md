@@ -42,8 +42,8 @@ verified against
 - [x] Markdown rendering for `--header` / `--message` (inline, system parser)
 - [x] `--icon` / `--icon-file` rendering (SF Symbols, file paths, .app bundles, base64)
 - [x] `--timeout` auto-close (+ `--timeout-default-button`)
-- [ ] `--width` / `--height` percentages of screen
-- [ ] `--debug` JSON output mode
+- [x] `--width` / `--height` percentages of screen (e.g. `--width 60%`)
+- [x] `--json` (alias `--debug`) structured output mode
 - [ ] AppleScript bridge mode (was used by some legacy callers)
 
 None of these are blockers for the TextMate Bundle Support use case.
