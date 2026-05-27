@@ -195,9 +195,11 @@ final class ChoiceControl: Control {
 			if kind == .radio, hasInput, b === inputRadio {
 				r.values.append(inputText)
 			} else {
-				r.values.append(b.title)
+				// Emit the ORIGINAL item value, not b.title (which may include
+				// the attributed (recommended) suffix or other rendering hints).
+				let raw = (i < items.count) ? items[i] : b.title
+				r.values.append(raw)
 			}
-			_ = i
 		}
 		// Checkbox: also append input text on its own line if non-empty.
 		if kind == .checkbox, hasInput, !inputText.isEmpty {
