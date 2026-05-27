@@ -14,12 +14,25 @@ final class ControlRunner {
 		let r = control.run(options: options)
 		exitCode = r.exit
 
-		// Output formatting.
 		let stringOutput = options.bool("string-output")
+		let json = options.bool("json")
 		let suppressNewline = options.bool("no-newline")
 
-		var lines: [String] = []
-		if stringOutput {
+		var out: String
+		if json {
+			let payload: [String: Any] = [
+				"button": r.buttonLabel ?? "",
+				"buttonIndex": r.buttonIndex ?? -1,
+				"values": Array(r.values.dropFirst()),  // first is button label
+				"exit": r.exit.rawValue,
+			]
+			let data = (try? JSONSerialization.data(
+				withJSONObject: payload,
+				options: [.sortedKeys, .prettyPrinted]
+			)) ?? Data()
+			out = String(data: data, encoding: .utf8) ?? "{}"
+		} else if stringOutput {
+			var lines: [String] = []
 			if let label = r.buttonLabel {
 				lines.append("button:\t\(label)")
 			}
@@ -27,11 +40,11 @@ final class ControlRunner {
 			if !body.isEmpty {
 				lines.append("value:\t\(body)")
 			}
+			out = lines.joined(separator: "\n")
 		} else {
-			lines = r.values
+			out = r.values.joined(separator: "\n")
 		}
 
-		var out = lines.joined(separator: "\n")
 		if !suppressNewline && !out.isEmpty {
 			out += "\n"
 		}

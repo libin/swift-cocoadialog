@@ -144,17 +144,26 @@ final class DialogPanel {
 		}
 		NSLayoutConstraint.activate(constraints)
 
-		// Apply explicit width / height if given.
+		// Apply explicit width / height if given. Supports raw points or `N%`.
+		let screen = NSScreen.main?.visibleFrame.size ?? NSSize(width: 1440, height: 900)
 		var size = NSSize(width: 480, height: 200)
-		let w = options.double("width")
-		let h = options.double("height")
-		if w > 0 { size.width = CGFloat(w) }
-		if h > 0 { size.height = CGFloat(h) }
+		if let w = parseSize(options.string("width"), screen: screen.width), w > 0 { size.width = w }
+		if let h = parseSize(options.string("height"), screen: screen.height), h > 0 { size.height = h }
 		panel.setContentSize(size)
 		panel.center()
 
 		// ESC -> cancel-button (or last button) click.
 		installEscMonitor(options: options)
+	}
+
+	private func parseSize(_ raw: String, screen: CGFloat) -> CGFloat? {
+		let s = raw.trimmingCharacters(in: .whitespaces)
+		if s.isEmpty { return nil }
+		if s.hasSuffix("%") {
+			let n = Double(s.dropLast()) ?? 0
+			return CGFloat(n / 100.0) * screen
+		}
+		return (Double(s) ?? 0) > 0 ? CGFloat(Double(s)!) : nil
 	}
 
 	private func anchorAboveControlView() -> NSLayoutAnchor<NSLayoutYAxisAnchor> {
