@@ -147,8 +147,20 @@ final class DialogPanel {
 		// Apply explicit width / height if given. Supports raw points or `N%`.
 		let screen = NSScreen.main?.visibleFrame.size ?? NSSize(width: 1440, height: 900)
 		var size = NSSize(width: 480, height: 200)
+
+		// Auto-grow width based on the longest line in header/message so long
+		// shell commands don't wrap awkwardly. Capped at 70% of screen width.
+		let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+		let boldFont = NSFont.boldSystemFont(ofSize: NSFont.systemFontSize + 2)
+		let maxAuto = max(size.width, ceil(longestLineWidth(options.string("header"), font: boldFont)))
+		let maxAuto2 = max(maxAuto, ceil(longestLineWidth(options.string("message"), font: font)))
+		let auto = min(maxAuto2 + 80 /* padding for icon + chrome */, screen.width * 0.70)
+		size.width = auto
+
 		if let w = parseSize(options.string("width"), screen: screen.width), w > 0 { size.width = w }
 		if let h = parseSize(options.string("height"), screen: screen.height), h > 0 { size.height = h }
+		header.preferredMaxLayoutWidth = size.width - 80
+		message.preferredMaxLayoutWidth = size.width - 80
 		panel.setContentSize(size)
 		panel.center()
 
@@ -164,6 +176,14 @@ final class DialogPanel {
 			return CGFloat(n / 100.0) * screen
 		}
 		return (Double(s) ?? 0) > 0 ? CGFloat(Double(s)!) : nil
+	}
+
+	private func longestLineWidth(_ s: String, font: NSFont) -> CGFloat {
+		guard !s.isEmpty else { return 0 }
+		let attrs: [NSAttributedString.Key: Any] = [.font: font]
+		return s.split(separator: "\n").map { line -> CGFloat in
+			(String(line) as NSString).size(withAttributes: attrs).width
+		}.max() ?? 0
 	}
 
 	private func anchorAboveControlView() -> NSLayoutAnchor<NSLayoutYAxisAnchor> {
