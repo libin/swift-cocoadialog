@@ -209,7 +209,7 @@ final class DialogPanel {
 	}
 
 	private func startTimeout(_ seconds: Double, defaultButton: String) {
-		timeoutTimer = Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { [weak self] _ in
+		let t = Timer(timeInterval: seconds, repeats: false) { [weak self] _ in
 			guard let self else { return }
 			let target = defaultButton.lowercased()
 			let btn = self.buttons.first(where: { $0.title.lowercased() == target })
@@ -217,6 +217,9 @@ final class DialogPanel {
 				?? self.buttons.first
 			btn?.performClick(nil)
 		}
+		RunLoop.main.add(t, forMode: .common)
+		RunLoop.main.add(t, forMode: .modalPanel)
+		timeoutTimer = t
 	}
 
 	/// Run modal, return the clicked button's tag (or nil if dismissed).
