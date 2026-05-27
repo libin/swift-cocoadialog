@@ -106,6 +106,34 @@ final class ChoiceControl: Control {
 			if let v = inputView {
 				v.widthAnchor.constraint(greaterThanOrEqualToConstant: 360).isActive = true
 			}
+			// Disable input until the freeform radio is selected; typing
+			// auto-selects the freeform radio for convenience.
+			if kind == .radio, let rb = inputRadio {
+				let enabled = (rb.state == .on)
+				inputField?.isEnabled = enabled
+				inputTextView?.isEditable = enabled
+				// Sync enabled-state on radio toggle.
+				objc_setAssociatedObject(self, &Self.inputFieldKey, inputField as Any, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+				objc_setAssociatedObject(self, &Self.inputTextViewKey, inputTextView as Any, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+				objc_setAssociatedObject(self, &Self.inputRadioKey, rb, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+				// Auto-select freeform radio when user types in the field.
+				if let tf = inputField {
+					NotificationCenter.default.addObserver(
+						self,
+						selector: #selector(inputDidChange(_:)),
+						name: NSControl.textDidChangeNotification,
+						object: tf
+					)
+				}
+				if let tv = inputTextView {
+					NotificationCenter.default.addObserver(
+						self,
+						selector: #selector(inputDidChange(_:)),
+						name: NSText.didChangeNotification,
+						object: tv
+					)
+				}
+			}
 		}
 
 		// Default to first radio if nothing pre-selected.
@@ -158,11 +186,37 @@ final class ChoiceControl: Control {
 	}
 
 	private static var buttonsKey = 0
+	private static var inputFieldKey = 0
+	private static var inputTextViewKey = 0
+	private static var inputRadioKey = 0
 
 	@objc private func radioToggled(_ sender: NSButton) {
 		let buttons = objc_getAssociatedObject(self, &Self.buttonsKey) as? [NSButton] ?? []
 		for b in buttons where b !== sender { b.state = .off }
 		sender.state = .on
+		syncInputEnabled()
+	}
+
+	@objc private func inputDidChange(_ note: Notification) {
+		let buttons = objc_getAssociatedObject(self, &Self.buttonsKey) as? [NSButton] ?? []
+		let inputRadio = objc_getAssociatedObject(self, &Self.inputRadioKey) as? NSButton
+		guard let rb = inputRadio else { return }
+		for b in buttons where b !== rb { b.state = .off }
+		rb.state = .on
+		syncInputEnabled()
+	}
+
+	private func syncInputEnabled() {
+		let inputRadio = objc_getAssociatedObject(self, &Self.inputRadioKey) as? NSButton
+		let enabled = inputRadio?.state == .on
+		if let tf = objc_getAssociatedObject(self, &Self.inputFieldKey) as? NSTextField {
+			tf.isEnabled = enabled
+			if enabled { tf.window?.makeFirstResponder(tf) }
+		}
+		if let tv = objc_getAssociatedObject(self, &Self.inputTextViewKey) as? NSTextView {
+			tv.isEditable = enabled
+			if enabled { tv.window?.makeFirstResponder(tv) }
+		}
 	}
 }
 
