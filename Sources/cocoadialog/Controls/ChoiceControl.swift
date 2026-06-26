@@ -49,8 +49,21 @@ final class ChoiceControl: Control {
 		let stack = NSStackView()
 		stack.orientation = .vertical
 		stack.alignment = .leading
-		stack.spacing = 4
+		stack.spacing = 10
 		stack.translatesAutoresizingMaskIntoConstraints = false
+
+		// Long choice labels should wrap to multiple lines instead of forcing an
+		// ultra-wide, thin window. Make each button full-width and word-wrapping.
+		func makeWrapping(_ b: NSButton) {
+			b.lineBreakMode = .byWordWrapping
+			b.cell?.usesSingleLineMode = false
+			(b.cell as? NSButtonCell)?.wraps = true
+			// Prefer wrapping over widening the window: without this the button
+			// insists on its full single-line width and stretches the dialog into a
+			// thin strip.
+			b.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+			b.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+		}
 
 		var buttons: [NSButton] = []
 		for (i, label) in items.enumerated() {
@@ -70,6 +83,9 @@ final class ChoiceControl: Control {
 					string: " (recommended)",
 					attributes: [.foregroundColor: NSColor.secondaryLabelColor]
 				))
+				let para = NSMutableParagraphStyle()
+				para.lineBreakMode = .byWordWrapping
+				base.addAttribute(.paragraphStyle, value: para, range: NSRange(location: 0, length: base.length))
 				b.attributedTitle = base
 				b.state = .on
 			}
@@ -86,6 +102,7 @@ final class ChoiceControl: Control {
 			}
 			buttons.append(b)
 			stack.addArrangedSubview(b)
+			makeWrapping(b)
 		}
 
 		// Inline input row + radio button (radio mode only).
@@ -98,6 +115,7 @@ final class ChoiceControl: Control {
 				let rb = NSButton(radioButtonWithTitle: inputLabel, target: self, action: #selector(radioToggled(_:)))
 				buttons.append(rb)
 				stack.addArrangedSubview(rb)
+				makeWrapping(rb)
 				inputRadio = rb
 			}
 			if inputMultiline {
@@ -175,6 +193,17 @@ final class ChoiceControl: Control {
 		])
 
 		objc_setAssociatedObject(self, &Self.buttonsKey, buttons, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+
+		// Pick a comfortable width: wide enough to read the longest option, but
+		// capped so a long option wraps to a couple of lines rather than producing
+		// an ultra-wide, thin window. Short option lists stay compact.
+		let optFont = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+		let longestOpt = (items + (hasInput ? [inputLabel] : [])).map {
+			($0 as NSString).size(withAttributes: [.font: optFont]).width
+		}.max() ?? 0
+		// + ~110pt: radio glyph + leading/trailing window padding + breathing room.
+		let desiredWidth = min(max(longestOpt + 110, 460), 640)
+		dialog.expandContentWidth(to: desiredWidth)
 
 		let (index, label) = dialog.runModal()
 		var r = ControlResult()

@@ -168,6 +168,21 @@ final class DialogPanel {
 		installEscMonitor(options: options)
 	}
 
+	/// Expand the content width to comfortably fit a control (e.g. a long list
+	/// of choices), capped to a fraction of the screen so the window never
+	/// becomes an ultra-wide thin strip. Height stays constraint-driven and the
+	/// call is a no-op if the panel is already at least this wide.
+	func expandContentWidth(to target: CGFloat) {
+		let screenW = NSScreen.main?.visibleFrame.width ?? 1440
+		let want = min(target, screenW * 0.85)
+		let cur = panel.contentRect(forFrameRect: panel.frame).size
+		guard want > cur.width else { return }
+		header.preferredMaxLayoutWidth = want - 80
+		message.preferredMaxLayoutWidth = want - 80
+		panel.setContentSize(NSSize(width: want, height: cur.height))
+		panel.center()
+	}
+
 	private func parseSize(_ raw: String, screen: CGFloat) -> CGFloat? {
 		let s = raw.trimmingCharacters(in: .whitespaces)
 		if s.isEmpty { return nil }
