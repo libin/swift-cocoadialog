@@ -19,6 +19,11 @@ verified against
 - [x] ESC closes via cancel button
 - [x] Backslash escape handling (`\n`, `\t`, `\r`, `\\`) for text fields
 - [x] Auto-grow panel width to fit longest header/message line (cap 70% screen)
+- [x] Message body is scrollable + height-capped (≤ 50% screen) with an
+      always-visible scrollbar when it overflows, so long commands never push
+      the buttons off-screen
+- [x] Shell syntax highlighting for command-like `--header` / `--message` text
+      (see `Util/ShellHighlighter.swift`)
 - [x] Help: `cocoadialog --help`, `cocoadialog <control> --help`
 
 ### Controls

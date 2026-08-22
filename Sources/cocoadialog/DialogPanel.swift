@@ -3,13 +3,18 @@ import AppKit
 /// Reusable layout: a vertical stack inside an opaque NSPanel.
 /// - Optional icon on the left
 /// - Header (bold) at top
-/// - Message (regular) below header — supports inline markdown
+/// - Message (regular) below header — supports inline markdown, or shell syntax
+///   highlighting when the text looks like a command. Rendered in a
+///   height-capped scroll view so long content (e.g. a `rm -rf …` command being
+///   confirmed) scrolls instead of pushing the buttons off the screen.
 /// - Custom controlView in the middle (filled by the concrete Control)
 /// - Buttons row at bottom-right
 final class DialogPanel {
 	let panel: NSPanel
 	let header: NSTextField
-	let message: NSTextField
+	let messageScroll: NSScrollView
+	let messageView: NSTextView
+	let hasMessage: Bool
 	let iconView: NSImageView
 	let controlView: NSView
 	let buttonsRow: NSStackView
@@ -54,7 +59,7 @@ final class DialogPanel {
 		iconView.image = icon
 		iconView.isHidden = (icon == nil)
 
-		// Header / message.
+		// Header.
 		header = NSTextField(labelWithString: "")
 		header.font = .boldSystemFont(ofSize: NSFont.systemFontSize + 2)
 		header.translatesAutoresizingMaskIntoConstraints = false
@@ -64,28 +69,61 @@ final class DialogPanel {
 		header.preferredMaxLayoutWidth = 440
 		header.allowsEditingTextAttributes = true
 		header.isSelectable = true
+		let headerRaw = options.string("header")
 		if !header.isHidden {
-			header.attributedStringValue = Markdown.attributed(
-				options.string("header"),
-				font: .boldSystemFont(ofSize: NSFont.systemFontSize + 2)
-			)
+			if ShellHighlighter.looksLikeCommand(headerRaw) {
+				header.attributedStringValue = ShellHighlighter.attributed(
+					headerRaw,
+					font: NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize + 1, weight: .semibold)
+				)
+			} else {
+				header.attributedStringValue = Markdown.attributed(
+					headerRaw,
+					font: .boldSystemFont(ofSize: NSFont.systemFontSize + 2)
+				)
+			}
 		}
 
-		message = NSTextField(labelWithString: "")
-		message.font = .systemFont(ofSize: NSFont.systemFontSize)
-		message.translatesAutoresizingMaskIntoConstraints = false
-		message.isHidden = options.string("message").isEmpty
-		message.lineBreakMode = .byWordWrapping
-		message.maximumNumberOfLines = 0
-		message.preferredMaxLayoutWidth = 440
-		message.allowsEditingTextAttributes = true
-		message.isSelectable = true
-		if !message.isHidden {
-			message.attributedStringValue = Markdown.attributed(
-				options.string("message"),
-				font: .systemFont(ofSize: NSFont.systemFontSize)
-			)
+		// Message body — rendered in a height-capped scroll view so long content
+		// scrolls and the buttons never leave the screen. Shell-like content is
+		// syntax highlighted; everything else uses the inline-markdown renderer.
+		let messageRaw = options.string("message")
+		hasMessage = !messageRaw.isEmpty
+		messageView = NSTextView()
+		messageScroll = NSScrollView()
+		let messageIsCommand = hasMessage && ShellHighlighter.looksLikeCommand(messageRaw)
+		let msgFont: NSFont = messageIsCommand
+			? NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+			: NSFont.systemFont(ofSize: NSFont.systemFontSize)
+		if hasMessage {
+			messageView.isEditable = false
+			messageView.isSelectable = true
+			messageView.drawsBackground = false
+			messageView.textContainerInset = NSSize(width: 0, height: 2)
+			messageView.isVerticallyResizable = true
+			messageView.isHorizontallyResizable = false
+			messageView.autoresizingMask = .width
+			messageView.minSize = NSSize(width: 0, height: 0)
+			messageView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+			messageView.textContainer?.widthTracksTextView = true
+			messageView.textContainer?.lineFragmentPadding = 0
+			let attr = messageIsCommand
+				? ShellHighlighter.attributed(messageRaw, font: msgFont)
+				: Markdown.attributed(messageRaw, font: msgFont)
+			messageView.textStorage?.setAttributedString(attr)
+
+			messageScroll.translatesAutoresizingMaskIntoConstraints = false
+			messageScroll.hasVerticalScroller = true
+			messageScroll.hasHorizontalScroller = false
+			messageScroll.drawsBackground = false
+			messageScroll.borderType = .noBorder
+			messageScroll.autohidesScrollers = true
+			// Always show a real scrollbar (not the fading overlay) when the body
+			// overflows, so it is obvious there is more command below the fold.
+			messageScroll.scrollerStyle = .legacy
+			messageScroll.documentView = messageView
 		}
+		messageScroll.isHidden = !hasMessage
 
 		controlView = NSView()
 		controlView.translatesAutoresizingMaskIntoConstraints = false
@@ -110,21 +148,50 @@ final class DialogPanel {
 		let cv = panel.contentView!
 		cv.addSubview(iconView)
 		cv.addSubview(header)
-		cv.addSubview(message)
+		cv.addSubview(messageScroll)
 		cv.addSubview(controlView)
 		cv.addSubview(buttonsRow)
 
 		let textLeading = iconView.isHidden ? cv.leadingAnchor : iconView.trailingAnchor
 		let textLeadingPad: CGFloat = iconView.isHidden ? 20 : 16
 
+		// Determine content width up-front (auto-grow to fit the longest header /
+		// message line, capped to 70% of the screen) so we can measure the wrapped
+		// message height before laying out.
+		let screen = NSScreen.main?.visibleFrame.size ?? NSSize(width: 1440, height: 900)
+		let boldFont = NSFont.boldSystemFont(ofSize: NSFont.systemFontSize + 2)
+		let longestHeader = ceil(longestLineWidth(headerRaw, font: boldFont))
+		let longestMsg = ceil(longestLineWidth(messageRaw, font: msgFont))
+		var width = min(max(480, max(longestHeader, longestMsg) + 80), screen.width * 0.70)
+		if let w = parseSize(options.string("width"), screen: screen.width), w > 0 { width = w }
+
+		// Measure the message height at the resolved width and cap the scroll view
+		// so very long commands scroll instead of growing the window off-screen.
+		let sidePad: CGFloat = textLeadingPad + 20 + (iconView.isHidden ? 0 : 64)
+		let textWidth = max(120, width - sidePad)
+		let maxMsgH = max(120, screen.height * 0.5)
+		if hasMessage {
+			let measured = messageView.attributedString().boundingRect(
+				with: NSSize(width: textWidth, height: .greatestFiniteMagnitude),
+				options: [.usesLineFragmentOrigin, .usesFontLeading]
+			).height
+			// Cap the body at ~half the screen; taller content scrolls inside so the
+			// buttons below never leave the screen.
+			let msgH = min(ceil(measured) + 8, maxMsgH)
+			messageScroll.heightAnchor.constraint(equalToConstant: msgH).isActive = true
+		}
+
 		var constraints: [NSLayoutConstraint] = [
 			header.leadingAnchor.constraint(equalTo: textLeading, constant: textLeadingPad),
 			cv.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: 20),
 			header.topAnchor.constraint(equalTo: cv.topAnchor, constant: 20),
 
-			message.leadingAnchor.constraint(equalTo: textLeading, constant: textLeadingPad),
-			cv.trailingAnchor.constraint(equalTo: message.trailingAnchor, constant: 20),
-			message.topAnchor.constraint(equalTo: header.isHidden ? cv.topAnchor : header.bottomAnchor, constant: header.isHidden ? 20 : 8),
+			messageScroll.leadingAnchor.constraint(equalTo: textLeading, constant: textLeadingPad),
+			cv.trailingAnchor.constraint(equalTo: messageScroll.trailingAnchor, constant: 20),
+			messageScroll.topAnchor.constraint(
+				equalTo: header.isHidden ? cv.topAnchor : header.bottomAnchor,
+				constant: header.isHidden ? 20 : 8
+			),
 
 			controlView.leadingAnchor.constraint(equalTo: cv.leadingAnchor, constant: 20),
 			cv.trailingAnchor.constraint(equalTo: controlView.trailingAnchor, constant: 20),
@@ -144,24 +211,14 @@ final class DialogPanel {
 		}
 		NSLayoutConstraint.activate(constraints)
 
-		// Apply explicit width / height if given. Supports raw points or `N%`.
-		let screen = NSScreen.main?.visibleFrame.size ?? NSSize(width: 1440, height: 900)
-		var size = NSSize(width: 480, height: 200)
-
-		// Auto-grow width based on the longest line in header/message so long
-		// shell commands don't wrap awkwardly. Capped at 70% of screen width.
-		let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
-		let boldFont = NSFont.boldSystemFont(ofSize: NSFont.systemFontSize + 2)
-		let maxAuto = max(size.width, ceil(longestLineWidth(options.string("header"), font: boldFont)))
-		let maxAuto2 = max(maxAuto, ceil(longestLineWidth(options.string("message"), font: font)))
-		let auto = min(maxAuto2 + 80 /* padding for icon + chrome */, screen.width * 0.70)
-		size.width = auto
-
-		if let w = parseSize(options.string("width"), screen: screen.width), w > 0 { size.width = w }
-		if let h = parseSize(options.string("height"), screen: screen.height), h > 0 { size.height = h }
-		header.preferredMaxLayoutWidth = size.width - 80
-		message.preferredMaxLayoutWidth = size.width - 80
-		panel.setContentSize(size)
+		// Apply width; the window height is constraint-driven and grows to fit
+		// header + (capped) message + control + buttons. Because the message body is
+		// capped at ~half the screen, the total never pushes the buttons off-screen.
+		var height = 200.0
+		if let h = parseSize(options.string("height"), screen: screen.height), h > 0 { height = h }
+		header.preferredMaxLayoutWidth = width - 80
+		panel.setContentSize(NSSize(width: width, height: height))
+		panel.center()
 		panel.center()
 
 		// ESC -> cancel-button (or last button) click.
@@ -178,7 +235,6 @@ final class DialogPanel {
 		let cur = panel.contentRect(forFrameRect: panel.frame).size
 		guard want > cur.width else { return }
 		header.preferredMaxLayoutWidth = want - 80
-		message.preferredMaxLayoutWidth = want - 80
 		panel.setContentSize(NSSize(width: want, height: cur.height))
 		panel.center()
 	}
@@ -202,14 +258,14 @@ final class DialogPanel {
 	}
 
 	private func anchorAboveControlView() -> NSLayoutAnchor<NSLayoutYAxisAnchor> {
-		if !message.isHidden { return message.bottomAnchor }
-		if !header.isHidden  { return header.bottomAnchor }
+		if hasMessage { return messageScroll.bottomAnchor }
+		if !header.isHidden { return header.bottomAnchor }
 		if !iconView.isHidden { return iconView.bottomAnchor }
 		return panel.contentView!.topAnchor
 	}
 
 	private func spacingAboveControlView() -> CGFloat {
-		(message.isHidden && header.isHidden && iconView.isHidden) ? 20 : 16
+		(!hasMessage && header.isHidden && iconView.isHidden) ? 20 : 16
 	}
 
 	private func makeButtons(labels: [String], options: ParsedOptions) {
