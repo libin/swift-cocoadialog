@@ -26,7 +26,19 @@ swift build -c release
 cp .build/release/cocoadialog /usr/local/bin/
 ```
 
-To swap into TextMate's Bundle Support (replacing the original ObjC binary):
+### Installing into TextMate's Bundle Support
+
+Use the bundled script — it builds, backs up the original once, copies the
+binary into `CocoaDialog.app`, **re-signs the bundle**, and smoke-tests the
+launch:
+
+```sh
+./install.sh              # build release, install, re-sign, verify
+./install.sh --no-build   # install the existing .build/release binary
+# COCOADIALOG_APP=/path/to/CocoaDialog.app ./install.sh   # custom target
+```
+
+To do it by hand instead:
 
 ```sh
 APP="$HOME/Library/Application Support/TextMate/Managed/Bundles/Bundle Support.tmbundle/Support/shared/bin/CocoaDialog.app"
@@ -43,7 +55,7 @@ codesign --force --deep -s - "$APP"  # REQUIRED: re-seal the bundle or macOS SIG
 > `CocoaDialog.app` invalidates the bundle seal, and macOS kills the process on
 > launch (`Killed: 9` / exit 137). Re-sign the *app bundle* (ad-hoc `-s -` is
 > fine) after every swap. Running `.build/release/cocoadialog` directly does not
-> need this — only the bundled copy does.
+> need this — only the bundled copy does. `install.sh` handles this for you.
 
 ## CLI
 
