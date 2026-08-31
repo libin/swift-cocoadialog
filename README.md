@@ -29,13 +29,21 @@ cp .build/release/cocoadialog /usr/local/bin/
 To swap into TextMate's Bundle Support (replacing the original ObjC binary):
 
 ```sh
-DST="$HOME/Library/Application Support/TextMate/Managed/Bundles/Bundle Support.tmbundle/Support/shared/bin/CocoaDialog.app/Contents/MacOS/CocoaDialog"
+APP="$HOME/Library/Application Support/TextMate/Managed/Bundles/Bundle Support.tmbundle/Support/shared/bin/CocoaDialog.app"
+DST="$APP/Contents/MacOS/CocoaDialog"
 cp "$DST" "$DST.objc.bak"          # keep a backup of the original
 cp .build/release/cocoadialog "$DST"
+codesign --force --deep -s - "$APP"  # REQUIRED: re-seal the bundle or macOS SIGKILLs it
 ```
 
 `CocoaDialog.app` is the executable wrapper; the binary inside is what
 `$DIALOG`-style scripts invoke.
+
+> **Re-signing is not optional.** Copying a new binary into the signed
+> `CocoaDialog.app` invalidates the bundle seal, and macOS kills the process on
+> launch (`Killed: 9` / exit 137). Re-sign the *app bundle* (ad-hoc `-s -` is
+> fine) after every swap. Running `.build/release/cocoadialog` directly does not
+> need this — only the bundled copy does.
 
 ## CLI
 

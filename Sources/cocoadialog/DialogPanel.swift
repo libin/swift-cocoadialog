@@ -148,7 +148,7 @@ final class DialogPanel {
 		let cv = panel.contentView!
 		cv.addSubview(iconView)
 		cv.addSubview(header)
-		cv.addSubview(messageScroll)
+		if hasMessage { cv.addSubview(messageScroll) }
 		cv.addSubview(controlView)
 		cv.addSubview(buttonsRow)
 
@@ -186,13 +186,6 @@ final class DialogPanel {
 			cv.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: 20),
 			header.topAnchor.constraint(equalTo: cv.topAnchor, constant: 20),
 
-			messageScroll.leadingAnchor.constraint(equalTo: textLeading, constant: textLeadingPad),
-			cv.trailingAnchor.constraint(equalTo: messageScroll.trailingAnchor, constant: 20),
-			messageScroll.topAnchor.constraint(
-				equalTo: header.isHidden ? cv.topAnchor : header.bottomAnchor,
-				constant: header.isHidden ? 20 : 8
-			),
-
 			controlView.leadingAnchor.constraint(equalTo: cv.leadingAnchor, constant: 20),
 			cv.trailingAnchor.constraint(equalTo: controlView.trailingAnchor, constant: 20),
 			controlView.topAnchor.constraint(equalTo: anchorAboveControlView(), constant: spacingAboveControlView()),
@@ -200,7 +193,22 @@ final class DialogPanel {
 			buttonsRow.topAnchor.constraint(greaterThanOrEqualTo: controlView.bottomAnchor, constant: 16),
 			cv.trailingAnchor.constraint(equalTo: buttonsRow.trailingAnchor, constant: 20),
 			cv.bottomAnchor.constraint(equalTo: buttonsRow.bottomAnchor, constant: 20),
+
+			// Keep the content at least the computed width so the window never
+			// collapses to its content's fitting size (e.g. a short radio menu with no
+			// --message). Height stays constraint-driven (bounded by the capped body).
+			cv.widthAnchor.constraint(greaterThanOrEqualToConstant: width),
 		]
+		if hasMessage {
+			constraints += [
+				messageScroll.leadingAnchor.constraint(equalTo: textLeading, constant: textLeadingPad),
+				cv.trailingAnchor.constraint(equalTo: messageScroll.trailingAnchor, constant: 20),
+				messageScroll.topAnchor.constraint(
+					equalTo: header.isHidden ? cv.topAnchor : header.bottomAnchor,
+					constant: header.isHidden ? 20 : 8
+				),
+			]
+		}
 		if !iconView.isHidden {
 			constraints += [
 				iconView.leadingAnchor.constraint(equalTo: cv.leadingAnchor, constant: 20),
@@ -218,7 +226,6 @@ final class DialogPanel {
 		if let h = parseSize(options.string("height"), screen: screen.height), h > 0 { height = h }
 		header.preferredMaxLayoutWidth = width - 80
 		panel.setContentSize(NSSize(width: width, height: height))
-		panel.center()
 		panel.center()
 
 		// ESC -> cancel-button (or last button) click.
