@@ -1,5 +1,13 @@
 import AppKit
 
+/// A view whose coordinate origin is top-left, like UIKit / flipped NSTextView.
+/// Used as the `documentView` holder for the options scroll view: a plain NSView
+/// has a bottom-left origin, which makes the scroll view open scrolled to the
+/// BOTTOM of a long list (first item hidden above the fold).
+final class FlippedView: NSView {
+	override var isFlipped: Bool { true }
+}
+
 /// Shared helper for radio + checkbox controls. cocoadialog's CDMatrix
 /// builds an NSMatrix; we use a vertical NSStackView of NSButtons since
 /// NSMatrix is deprecated and brittle on macOS 14+.
@@ -184,13 +192,47 @@ final class ChoiceControl: Control {
 			buttons.first?.state = .on
 		}
 
-		dialog.controlView.addSubview(stack)
+		// Host the options in a height-capped scroll view: a long list (e.g. 20+
+		// browser tabs) then scrolls instead of growing the window until the buttons
+		// fall off the bottom of the screen. Short lists render at natural height
+		// with no scroller.
+		let screenH = NSScreen.main?.visibleFrame.height ?? 900
+		let maxStackH = max(160, screenH * 0.5)
+
+		let optionsScroll = NSScrollView()
+		optionsScroll.translatesAutoresizingMaskIntoConstraints = false
+		optionsScroll.hasVerticalScroller = true
+		optionsScroll.hasHorizontalScroller = false
+		optionsScroll.drawsBackground = false
+		optionsScroll.borderType = .noBorder
+		optionsScroll.autohidesScrollers = true
+		optionsScroll.scrollerStyle = .legacy
+
+		let holder = FlippedView()
+		holder.translatesAutoresizingMaskIntoConstraints = false
+		holder.addSubview(stack)
+		optionsScroll.documentView = holder
+
+		dialog.controlView.addSubview(optionsScroll)
 		NSLayoutConstraint.activate([
-			stack.leadingAnchor.constraint(equalTo: dialog.controlView.leadingAnchor),
-			stack.trailingAnchor.constraint(equalTo: dialog.controlView.trailingAnchor),
-			stack.topAnchor.constraint(equalTo: dialog.controlView.topAnchor),
-			dialog.controlView.bottomAnchor.constraint(equalTo: stack.bottomAnchor),
+			stack.leadingAnchor.constraint(equalTo: holder.leadingAnchor),
+			stack.trailingAnchor.constraint(equalTo: holder.trailingAnchor),
+			stack.topAnchor.constraint(equalTo: holder.topAnchor),
+			holder.bottomAnchor.constraint(equalTo: stack.bottomAnchor),
+			// Match the clip view's width so options wrap to the dialog width instead
+			// of scrolling horizontally.
+			holder.widthAnchor.constraint(equalTo: optionsScroll.contentView.widthAnchor),
+
+			optionsScroll.leadingAnchor.constraint(equalTo: dialog.controlView.leadingAnchor),
+			optionsScroll.trailingAnchor.constraint(equalTo: dialog.controlView.trailingAnchor),
+			optionsScroll.topAnchor.constraint(equalTo: dialog.controlView.topAnchor),
+			dialog.controlView.bottomAnchor.constraint(equalTo: optionsScroll.bottomAnchor),
+			optionsScroll.heightAnchor.constraint(lessThanOrEqualToConstant: maxStackH),
 		])
+		// Prefer the natural (unscrolled) height when it fits under the cap.
+		let hug = optionsScroll.heightAnchor.constraint(equalTo: holder.heightAnchor)
+		hug.priority = .defaultHigh
+		hug.isActive = true
 
 		objc_setAssociatedObject(self, &Self.buttonsKey, buttons, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
 

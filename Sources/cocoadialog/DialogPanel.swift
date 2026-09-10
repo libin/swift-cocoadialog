@@ -198,6 +198,10 @@ final class DialogPanel {
 			// collapses to its content's fitting size (e.g. a short radio menu with no
 			// --message). Height stays constraint-driven (bounded by the capped body).
 			cv.widthAnchor.constraint(greaterThanOrEqualToConstant: width),
+			// Hard ceiling: no control (e.g. a dropdown holding a very long web page
+			// title) may widen the window past the screen, which would push the
+			// buttons out of view. Controls must compress/truncate instead.
+			cv.widthAnchor.constraint(lessThanOrEqualToConstant: max(width, screen.width * 0.85)),
 		]
 		if hasMessage {
 			constraints += [

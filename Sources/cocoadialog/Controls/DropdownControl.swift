@@ -15,6 +15,12 @@ final class DropdownControl: Control {
 
 		let popup = NSPopUpButton(frame: .zero, pullsDown: options.bool("pulldown"))
 		popup.translatesAutoresizingMaskIntoConstraints = false
+		// A long item (e.g. a web page title) must not widen the window past the
+		// screen and push the buttons out of view: let the popup be compressed and
+		// ellipsize its title instead of insisting on its full intrinsic width.
+		popup.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+		popup.cell?.lineBreakMode = .byTruncatingTail
+		popup.cell?.usesSingleLineMode = true
 		let items = options.array("items")
 		for item in items { popup.addItem(withTitle: item) }
 		let initial = options.int("selected", default: 0)
@@ -23,12 +29,14 @@ final class DropdownControl: Control {
 		}
 
 		dialog.controlView.addSubview(popup)
+		let screenW = NSScreen.main?.visibleFrame.width ?? 1440
 		NSLayoutConstraint.activate([
 			popup.leadingAnchor.constraint(equalTo: dialog.controlView.leadingAnchor),
 			popup.trailingAnchor.constraint(equalTo: dialog.controlView.trailingAnchor),
 			popup.topAnchor.constraint(equalTo: dialog.controlView.topAnchor),
 			popup.heightAnchor.constraint(greaterThanOrEqualToConstant: 24),
 			popup.widthAnchor.constraint(greaterThanOrEqualToConstant: 300),
+			popup.widthAnchor.constraint(lessThanOrEqualToConstant: max(300, screenW * 0.8)),
 			dialog.controlView.bottomAnchor.constraint(equalTo: popup.bottomAnchor),
 		])
 
