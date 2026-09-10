@@ -70,6 +70,11 @@ final class ChoiceControl: Control {
 			// insists on its full single-line width and stretches the dialog into a
 			// thin strip.
 			b.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+			// ...but NEVER compress vertically. The options live in a height-capped
+			// scroll view; without a required vertical resistance AppKit satisfies the
+			// cap by squashing the buttons into each other (overlapping text) instead
+			// of letting the content overflow and scroll.
+			b.setContentCompressionResistancePriority(.required, for: .vertical)
 			b.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		}
 
@@ -229,7 +234,12 @@ final class ChoiceControl: Control {
 			dialog.controlView.bottomAnchor.constraint(equalTo: optionsScroll.bottomAnchor),
 			optionsScroll.heightAnchor.constraint(lessThanOrEqualToConstant: maxStackH),
 		])
-		// Prefer the natural (unscrolled) height when it fits under the cap.
+		// Hug the natural (unscrolled) height so a short list renders at full height
+		// with no scroller. For a long list this loses to the required cap and
+		// breaks, leaving scroll.height = cap while the holder keeps its full
+		// natural height — i.e. the excess scrolls. That only works because the
+		// buttons resist vertical compression at .required (see makeWrapping):
+		// otherwise AppKit satisfies the cap by squashing them into each other.
 		let hug = optionsScroll.heightAnchor.constraint(equalTo: holder.heightAnchor)
 		hug.priority = .defaultHigh
 		hug.isActive = true
