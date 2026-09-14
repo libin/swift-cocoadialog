@@ -10,6 +10,13 @@ import AppKit
 /// - Custom controlView in the middle (filled by the concrete Control)
 /// - Buttons row at bottom-right
 final class DialogPanel {
+	/// Widest the dialog will auto-grow to fit its content: ~100 monospace
+	/// columns at the message font. Wide enough for most commands and log lines,
+	/// narrow enough to stay readable. A screen fraction alone is not sufficient:
+	/// on a large display 70-85% is still an unreadable ~250-column line. Long
+	/// content wraps at this measure instead. `--width` overrides it.
+	static let readableMaxWidth: CGFloat = 880
+
 	let panel: NSPanel
 	let header: NSTextField
 	let messageScroll: NSScrollView
@@ -155,14 +162,23 @@ final class DialogPanel {
 		let textLeading = iconView.isHidden ? cv.leadingAnchor : iconView.trailingAnchor
 		let textLeadingPad: CGFloat = iconView.isHidden ? 20 : 16
 
-		// Determine content width up-front (auto-grow to fit the longest header /
-		// message line, capped to 70% of the screen) so we can measure the wrapped
-		// message height before laying out.
+		// Determine content width up-front so we can measure the wrapped message
+		// height before laying out.
+		//
+		// Auto-grow is capped at a READABLE width, not a fraction of the screen: a
+		// single-line 700-char bash command (approval gates pass the whole command)
+		// would otherwise stretch the dialog to the full width of a wide display,
+		// producing one unreadable ~250-column line. Long bodies should wrap at a
+		// comfortable measure instead. The screen fraction remains as the absolute
+		// ceiling so narrow displays still clamp. --width overrides both.
 		let screen = NSScreen.main?.visibleFrame.size ?? NSSize(width: 1440, height: 900)
 		let boldFont = NSFont.boldSystemFont(ofSize: NSFont.systemFontSize + 2)
 		let longestHeader = ceil(longestLineWidth(headerRaw, font: boldFont))
 		let longestMsg = ceil(longestLineWidth(messageRaw, font: msgFont))
-		var width = min(max(480, max(longestHeader, longestMsg) + 80), screen.width * 0.70)
+		// ~100 monospace columns at the message font — wide enough for most commands
+		// and log lines, narrow enough to stay readable.
+		let autoGrowCap = min(Self.readableMaxWidth, screen.width * 0.70)
+		var width = min(max(480, max(longestHeader, longestMsg) + 80), autoGrowCap)
 		if let w = parseSize(options.string("width"), screen: screen.width), w > 0 { width = w }
 
 		// Measure the message height at the resolved width and cap the scroll view
@@ -237,12 +253,15 @@ final class DialogPanel {
 	}
 
 	/// Expand the content width to comfortably fit a control (e.g. a long list
-	/// of choices), capped to a fraction of the screen so the window never
-	/// becomes an ultra-wide thin strip. Height stays constraint-driven and the
-	/// call is a no-op if the panel is already at least this wide.
+	/// of choices), capped to a readable measure so the window never becomes an
+	/// ultra-wide thin strip on a large display. Height stays constraint-driven
+	/// and the call is a no-op if the panel is already at least this wide.
 	func expandContentWidth(to target: CGFloat) {
 		let screenW = NSScreen.main?.visibleFrame.width ?? 1440
-		let want = min(target, screenW * 0.85)
+		// Same readable bound as the initial width computation: long option labels
+		// should wrap at a comfortable measure rather than stretch the dialog across
+		// a wide monitor.
+		let want = min(target, min(Self.readableMaxWidth, screenW * 0.85))
 		let cur = panel.contentRect(forFrameRect: panel.frame).size
 		guard want > cur.width else { return }
 		header.preferredMaxLayoutWidth = want - 80
